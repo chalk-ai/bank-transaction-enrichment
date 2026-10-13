@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transaction Enrichment</title>
+<style>
+  /* Chalk marketing palette: green-1 ground, chartreuse primary, mint accents. */
+  :root { --bg:#224A41; --panel:#1C3B34; --line:#32645B; --ink:#EFF5F3; --muted:#B9CFC7; --dim:#7BA392;
+          --accent:#BBD96D; --mint:#70CD96; --lav:#B29AF9; --sky:#81CEEA; --bad:#F8947F; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; padding:32px 16px; }
+  html.embed body { padding:24px 20px; }
+  html.embed header { display:none; }
+  .wrap { max-width:1100px; margin:0 auto; display:flex; flex-direction:column; gap:16px; }
+  .mono { font-family:ui-monospace,"SFMono-Regular",Menlo,monospace; }
+  .caps { font-family:ui-monospace,"SFMono-Regular",Menlo,monospace; text-transform:uppercase;
+          letter-spacing:.06em; font-size:12px; }
+  h1 { font-size:22px; font-weight:500; margin:0 0 4px; letter-spacing:-0.3px; }
+  header p { color:var(--muted); margin:0; font-size:14px; }
+  .bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  form { display:flex; gap:10px; flex:1; min-width:280px; }
+  input { min-width:0; font:inherit; color:var(--ink); background:var(--panel); border:1px solid var(--line);
+          border-radius:4px; padding:10px 12px; outline:none; }
+  input:focus { border-color:var(--mint); }
+  #memo { flex:1; font-family:ui-monospace,Menlo,monospace; font-size:14px; }
+  #amt { width:110px; }
+  button { font:13px/15px ui-monospace,"SFMono-Regular",Menlo,monospace; text-transform:uppercase;
+           letter-spacing:.06em; border:1px solid var(--accent); border-radius:20px; padding:11px 18px;
+           cursor:pointer; background:var(--accent); color:var(--bg); white-space:nowrap; }
+  button:hover { background:transparent; color:var(--accent); }
+  button.ghost { background:transparent; color:var(--accent); border-color:rgba(187,217,109,.35); }
+  button.ghost:hover { border-color:var(--accent); }
+  button:disabled { opacity:.5; cursor:default; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; color:var(--muted); }
+  .legend span { display:inline-flex; align-items:center; gap:6px; }
+  .sw { width:10px; height:10px; border-radius:2px; display:inline-block; }
+  #meta { color:var(--muted); min-height:18px; }
+  #meta b { color:var(--ink); font-weight:500; }
+  .list { display:flex; flex-direction:column; border:1px solid var(--line); border-radius:4px; background:var(--panel); }
+  .row { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) 92px; gap:8px 18px;
+         padding:14px 16px; border-bottom:1px solid var(--line); align-items:start; }
+  .row:last-child { border-bottom:0; }
+  .row.new { animation:flash 1.2s ease-out; }
+  @keyframes flash { from { background:rgba(187,217,109,.12); } to { background:transparent; } }
+  @media (max-width:760px) { .row { grid-template-columns:1fr; } .amt { text-align:left !important; }
+                             form { flex-direction:column; } #amt { width:100%; } }
+  .memo { font-family:ui-monospace,Menlo,monospace; font-size:13px; color:var(--muted); word-break:break-word; }
+  .memo mark { background:none; color:inherit; border-radius:2px; padding:0 1px; }
+  .memo .m { color:var(--accent); box-shadow:inset 0 -2px 0 rgba(187,217,109,.6); }
+  .memo .p { color:var(--lav); box-shadow:inset 0 -2px 0 rgba(178,154,249,.5); }
+  .memo .l { color:var(--mint); box-shadow:inset 0 -2px 0 rgba(112,205,150,.45); }
+  .memo .n { color:var(--dim); text-decoration:line-through; text-decoration-color:rgba(123,163,146,.7); }
+  .sub { color:var(--dim); font-size:12px; margin-top:6px; }
+  .merchant { font-size:16px; font-weight:500; }
+  .merchant.none { color:var(--muted); font-style:italic; font-weight:400; }
+  .where { color:var(--muted); font-size:13px; }
+  .cat { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px; }
+  .pill { font-family:ui-monospace,Menlo,monospace; font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+          padding:3px 8px; border-radius:10px; border:1px solid var(--mint); color:var(--mint); }
+  .pill.recurring { border-color:var(--sky); color:var(--sky); }
+  .conf { font-family:ui-monospace,Menlo,monospace; font-size:12px; color:var(--ink); }
+  .alts { color:var(--dim); font-size:12px; margin-top:4px; }
+  .ess { display:inline-flex; align-items:center; gap:6px; color:var(--dim); font-size:12px; }
+  .ess i { width:46px; height:4px; border-radius:2px; background:var(--line); position:relative; overflow:hidden; }
+  .ess i b { position:absolute; inset:0 auto 0 0; background:var(--accent); }
+  .check { font-size:12px; margin-top:4px; } .check.ok { color:var(--mint); } .check.bad { color:var(--bad); }
+  .amt { text-align:right; font-family:ui-monospace,Menlo,monospace; }
+  .amt.in { color:var(--mint); }
+  .empty { padding:28px 16px; color:var(--muted); text-align:center; }
+</style>
+<script>
+  if (new URLSearchParams(location.search).has("embed")) document.documentElement.classList.add("embed");
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Clean and categorize bank transactions</h1>
+    <p>ModernBERT-GLiNER tags every part of a raw memo. Clef-Flash picks the merchant and answers typed questions about the transaction, with a probability for every option.</p>
+  </header>
+  <div class="bar">
+    <button id="batch" type="button">New batch</button>
+    <form id="f">
+      <input id="memo" autocomplete="off" maxlength="200" placeholder="Or paste a memo, e.g. SQ *BLUE BOTTLE COFFE OAKLAND CA">
+      <input id="amt" type="number" step="0.01" value="12.50" aria-label="Amount, positive for money out">
+      <button class="ghost" type="submit">Enrich</button>
+    </form>
+  </div>
+  <div class="legend caps">
+    <span><i class="sw" style="background:var(--accent)"></i>merchant</span>
+    <span><i class="sw" style="background:var(--lav)"></i>processor / person</span>
+    <span><i class="sw" style="background:var(--mint)"></i>place</span>
+    <span><i class="sw" style="background:var(--dim)"></i>noise removed</span>
+  </div>
+  <div id="meta" class="caps"></div>
+  <div class="list" id="list"><div class="empty">Loading a batch of synthetic transactions…</div></div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const NICE = {
+  INCOME: "Income", TRANSFER_IN: "Transfer in", TRANSFER_OUT: "Transfer out", LOAN_PAYMENTS: "Loan payments",
+  BANK_FEES: "Bank fees", ENTERTAINMENT: "Entertainment", FOOD_AND_DRINK: "Food & drink",
+  GENERAL_MERCHANDISE: "General merchandise", HOME_IMPROVEMENT: "Home improvement", MEDICAL: "Medical",
+  PERSONAL_CARE: "Personal care", GENERAL_SERVICES: "General services",
+  GOVERNMENT_AND_NON_PROFIT: "Government & non-profit", TRANSPORTATION: "Transportation", TRAVEL: "Travel",
+  RENT_AND_UTILITIES: "Rent & utilities",
+};
+const SPAN_CLASS = {
+  company: "m", brand: "m", "payment processor": "p", person: "p", city: "l", state: "l",
+  "phone number": "n", "reference number": "n", "store number": "n", date: "n",
+};
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function memoNode(memo, spans, merchant) {
+  // Non-overlapping spans in order; the chosen merchant's text is always shown as the merchant.
+  const node = el("div", "memo");
+  let at = 0;
+  const pick = (merchant || "").toLowerCase();
+  for (const s of spans) {
+    if (s.start < at) continue;
+    node.append(memo.slice(at, s.start));
+    let cls = SPAN_CLASS[s.label] || "n";
+    if (pick && s.text.toLowerCase().includes(pick.split(" ")[0])) cls = "m";
+    else if (cls === "m") cls = "p";
+    const m = el("mark", cls, memo.slice(s.start, s.end));
+    m.title = `${s.label} · ${Math.round(s.score * 100)}%`;
+    node.append(m);
+    at = s.end;
+  }
+  node.append(memo.slice(at));
+  return node;
+}
+
+function rowNode(tx, fresh) {
+  const e = tx.enrichment;
+  const row = el("div", "row" + (fresh ? " new" : ""));
+  const left = el("div");
+  left.append(memoNode(tx.name, e.spans, tx.merchant_name));
+  left.append(el("div", "sub caps", `${tx.date} · ${tx.payment_channel || "other"} · ${e.input_tokens} tokens`));
+  row.append(left);
+
+  const mid = el("div");
+  const name = el("div", "merchant" + (tx.merchant_name ? "" : " none"), tx.merchant_name || "No merchant");
+  mid.append(name);
+  if (e.location) mid.append(el("div", "where", e.location));
+  const cat = el("div", "cat");
+  const pfc = tx.personal_finance_category;
+  cat.append(el("span", "pill", NICE[pfc.primary] || pfc.primary));
+  cat.append(el("span", "conf", `${Math.round(pfc.confidence * 100)}%`));
+  if (e.recurring >= 0.5) cat.append(el("span", "pill recurring", `recurring ${Math.round(e.recurring * 100)}%`));
+  const ess = el("span", "ess", "essential");
+  const meter = el("i"); const fill = el("b"); fill.style.width = `${Math.round(e.essential * 100)}%`;
+  meter.append(fill); ess.append(meter); cat.append(ess);
+  mid.append(cat);
+  const alts = e.category_top3.slice(1).filter((a) => a.probability >= 0.02)
+    .map((a) => `${NICE[a.category] || a.category} ${Math.round(a.probability * 100)}%`);
+  if (alts.length) mid.append(el("div", "alts", "then " + alts.join(" · ")));
+  if (tx.expected) {
+    const ok = tx.expected.category === pfc.primary;
+    mid.append(el("div", "check " + (ok ? "ok" : "bad"),
+      ok ? "✓ matches the generator's label" : `✗ generator labeled it ${NICE[tx.expected.category]}`));
+  }
+  row.append(mid);
+
+  const amt = el("div", "amt" + (tx.amount < 0 ? " in" : ""),
+    (tx.amount < 0 ? "+" : "−") + "$" + Math.abs(tx.amount).toFixed(2));
+  row.append(amt);
+  return row;
+}
+
+function setMeta(n, t) {
+  $("meta").replaceChildren(`${n} transaction${n === 1 ? "" : "s"} · memo cleanup `, el("b", null, `${t.cleanup_ms} ms`),
+    " · decisions ", el("b", null, `${t.decisions_ms} ms`), " · total ", el("b", null, `${t.total_ms} ms`));
+}
+
+async function enrich(transactions) {
+  const r = await fetch("api/enrich", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ transactions }),
+  });
+  if (!r.ok) throw new Error(r.status === 503 ? "the GPU is busy, try again in a moment" : `HTTP ${r.status}`);
+  return r.json();
+}
+
+function busy(on) { for (const b of document.querySelectorAll("button")) b.disabled = on; }
+
+async function newBatch() {
+  busy(true);
+  $("meta").textContent = "Enriching a new batch…";
+  try {
+    const s = await (await fetch("api/sample?n=10")).json();
+    const res = await enrich(s.transactions);
+    $("list").replaceChildren(...res.transactions.map((tx) => rowNode(tx, false)));
+    setMeta(res.transactions.length, res.timings_ms);
+  } catch (e) {
+    $("meta").textContent = "Enrichment failed: " + e.message;
+  } finally { busy(false); }
+}
+
+$("f").onsubmit = async (ev) => {
+  ev.preventDefault();
+  const name = $("memo").value.trim();
+  const amount = parseFloat($("amt").value);
+  if (!name || Number.isNaN(amount)) return;
+  busy(true);
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const res = await enrich([{ transaction_id: "custom", name, amount, date: today, payment_channel: "other" }]);
+    $("list").querySelector(".empty")?.remove();
+    $("list").prepend(rowNode(res.transactions[0], true));
+    setMeta(1, res.timings_ms);
+  } catch (e) {
+    $("meta").textContent = "Enrichment failed: " + e.message;
+  } finally { busy(false); }
+};
+$("batch").onclick = newBatch;
+newBatch();
+
+// Embedded in another page: report our height so the parent can size the iframe to fit.
+if (document.documentElement.classList.contains("embed") && window.parent !== window) {
+  const report = () => window.parent.postMessage(
+    { type: "chalk-demo-height", height: Math.ceil(document.body.getBoundingClientRect().height) }, "*");
+  new ResizeObserver(report).observe(document.body);
+  report();
+}
+</script>
+</body>
+</html>
