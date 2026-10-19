@@ -10,13 +10,11 @@ One replica holds both models on one GPU: ModernBERT-GLiNER for memo cleanup and
 (9B, about 19 GB in bf16) for decisions, so it needs a 48 GB card such as an L40S.
 
 Credentials come from your existing `chalk login` (or the CHALK_* env vars):
-    ./deploy.py [--env-id <environment>] [--gpu nvidia-l40s]
+    ./deploy.py
 """
 
 from __future__ import annotations
 
-import argparse
-import os
 import time
 from pathlib import Path
 
@@ -30,15 +28,6 @@ CLEF = ("Cloudflare/clef-flash", "8b2e5fd17c09fd49bc2880b805d5323ec7ff4ff3")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--name", default="transaction-enrichment")
-    parser.add_argument("--env-id", default=None)
-    parser.add_argument("--gpu", default="nvidia-l40s")
-    parser.add_argument("--ready-timeout", type=float, default=2400.0)
-    args = parser.parse_args()
-
-    if args.env_id:
-        os.environ["CHALK_ENVIRONMENT"] = args.env_id
     from chalkcompute import Image, ReadinessProbe, ScalingGroup
 
     gliner_fetch = "; ".join(
@@ -78,8 +67,8 @@ def main() -> None:
 
     sg = ScalingGroup(
         image=image,
-        name=args.name,
-        gpu=args.gpu,
+        name='transaction-enrichment',
+        gpu='nvidia-l40s',
         cpu="2",
         memory="24Gi",
         env={"CLEF_MODEL": CLEF[0], "CLEF_REVISION": CLEF[1]},
@@ -96,7 +85,7 @@ def main() -> None:
     )
     t0 = time.monotonic()
     try:
-        sg.deploy(build_timeout=2400.0, ready_timeout=args.ready_timeout)
+        sg.deploy(build_timeout=2400.0, ready_timeout=2400.0)
     finally:
         print(f"deploy returned after {time.monotonic() - t0:.0f}s")
     print("web_url:", sg.web_url)
