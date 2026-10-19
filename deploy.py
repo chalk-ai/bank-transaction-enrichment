@@ -9,16 +9,14 @@
 One replica holds both models on one GPU: ModernBERT-GLiNER for memo cleanup and Clef-Flash
 (9B, about 19 GB in bf16) for decisions, so it needs a 48 GB card such as an L40S.
 
-Credentials come from `chalk config` in the current directory (or the CHALK_* env vars):
+Credentials come from your existing `chalk login` (or the CHALK_* env vars):
     ./deploy.py [--env-id <environment>] [--gpu nvidia-l40s]
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
-import subprocess
 import time
 from pathlib import Path
 
@@ -31,17 +29,6 @@ GLINER_DEPS = ["BAAI/bge-base-en-v1.5", "answerdotai/ModernBERT-large"]
 CLEF = ("Cloudflare/clef-flash", "8b2e5fd17c09fd49bc2880b805d5323ec7ff4ff3")
 
 
-def load_chalk_env(env_id: str | None) -> None:
-    if "CHALK_CLIENT_ID" not in os.environ:
-        cfg = json.loads(subprocess.check_output(["chalk", "config", "--json"]))
-        os.environ["CHALK_API_SERVER"] = cfg["apiServer"]["value"]
-        os.environ["CHALK_CLIENT_ID"] = cfg["clientId"]["value"]
-        os.environ["CHALK_CLIENT_SECRET"] = cfg["clientSecret"]["value"]
-        os.environ.setdefault("CHALK_ENVIRONMENT_ID", cfg["environment"]["value"])
-    if env_id:
-        os.environ["CHALK_ENVIRONMENT_ID"] = env_id
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", default="transaction-enrichment")
@@ -50,7 +37,8 @@ def main() -> None:
     parser.add_argument("--ready-timeout", type=float, default=2400.0)
     args = parser.parse_args()
 
-    load_chalk_env(args.env_id)
+    if args.env_id:
+        os.environ["CHALK_ENVIRONMENT"] = args.env_id
     from chalkcompute import Image, ReadinessProbe, ScalingGroup
 
     gliner_fetch = "; ".join(
