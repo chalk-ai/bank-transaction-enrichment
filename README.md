@@ -30,11 +30,11 @@ and fills in `merchant_name` and `personal_finance_category`.
 ## Run it
 
 You need [`uv`](https://docs.astral.sh/uv/) and a Chalk environment that can schedule a 48 GB GPU
-(Clef-Flash is about 19 GB in bf16). Credentials come from `chalk config` in the current directory,
+(Clef-Flash is about 19 GB in bf16). Credentials come from the SDK’s ambient credentials from `chalk login`,
 or from `CHALK_API_SERVER`, `CHALK_CLIENT_ID`, `CHALK_CLIENT_SECRET` and `CHALK_ENVIRONMENT_ID`.
 
 ```bash
-./deploy.py --gpu nvidia-l40s
+./deploy.py
 ./evaluate.py https://<web_url> --seeds 3
 ```
 
@@ -75,3 +75,10 @@ cleanup picks a span from the memo rather than generating a new name.
 ## License
 
 Apache-2.0. Clef-Flash and modern-gliner-bi-large-v1.0 are both released under Apache-2.0.
+
+## Local authentication
+
+The SDK reads credentials, API host, and the selected environment from your existing
+`chalk login` in `~/.chalk.yml`, including project-scoped and default logins.
+For unattended runs, `CHALK_CLIENT_ID` and `CHALK_CLIENT_SECRET` remain supported.
+The examples use the current environment selected by your Chalk login.
